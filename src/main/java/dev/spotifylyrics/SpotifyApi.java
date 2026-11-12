@@ -98,7 +98,8 @@ public final class SpotifyApi {
 			    }
 			}
 			"@
-			[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime] | Out-Null
+
+					[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime] | Out-Null
 			$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 			$lastLine = ""
 			$lastPoll = [DateTime]::MinValue
@@ -186,3 +187,46 @@ public final class SpotifyApi {
 
 	private void parseSample(String json) {
 		try {
+			JsonObject o = JsonParser.parseString(json).getAsJsonObject();
+			String title = o.has("title") && !o.get("title").isJsonNull() ? o.get("title").getAsString() : "";
+			String artist = o.has("artist") && !o.get("artist").isJsonNull() ? o.get("artist").getAsString() : "";
+			if (title.isBlank()) { latestSample = null; return; }
+			String album = o.has("album") && !o.get("album").isJsonNull() ? o.get("album").getAsString() : "";
+			boolean playing = o.has("playing") && !o.get("playing").isJsonNull() && o.get("playing").getAsBoolean();
+			long posMs = o.has("posMs") && !o.get("posMs").isJsonNull() ? o.get("posMs").getAsLong() : 0;
+			long durMs = o.has("durMs") && !o.get("durMs").isJsonNull() ? o.get("durMs").getAsLong() : 0;
+			int vol = o.has("vol") && !o.get("vol").isJsonNull() ? o.get("vol").getAsInt() : -1;
+			String trackId = (artist + " - " + title).toLowerCase();
+			latestSample = new Sample(trackId, title, artist, album, durMs, posMs, playing, System.nanoTime(), vol);
+		} catch (Exception ignored) {}
+	}
+
+	public Optional<Sample> currentPlayback() {
+		if (worker == null || !worker.isAlive()) startWorker();
+		return Optional.ofNullable(latestSample);
+	}
+
+	public Result seek(long positionMs) { return sendCmd("SEEK:" + Math.max(0, positionMs), "Seeked"); }
+	public Result pause() { return sendCmd("PAUSE", "Paused"); }
+	public Result resume() { return sendCmd("PLAY", "Resumed"); }
+	public Result next() { return sendCmd("NEXT", "Skipped to next track"); }
+	public Result previous() { return sendCmd("PREV", "Previous track"); }
+	public Result volume(int percent) {
+		int v = Math.max(0, Math.min(100, percent));
+		return sendCmd("VOL:" + v, "Volume " + v + "%");
+	}
+	public Result searchAndPlay(String query) { return Result.fail("Search and play songs in the Spotify app."); }
+
+	private synchronized Result sendCmd(String cmd, String okMsg) {
+		try {
+			if (worker == null || !worker.isAlive()) startWorker();
+			if (workerIn != null) {
+				workerIn.write(cmd);
+				workerIn.newLine();
+				workerIn.flush();
+				return Result.ok(okMsg);
+			}
+		} catch (Exception ignored) {}
+		return Result.fail("Media session not connected");
+	}
+}
