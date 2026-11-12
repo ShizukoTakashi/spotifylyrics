@@ -135,9 +135,7 @@ public final class SettingsScreen extends Screen {
 		}).bounds(left, y, PANEL_W, 18).build());
 		y += 22;
 
-		addRenderableWidget(new ColorWheelWidget(left + 2, y, 64, 64));
-
-		int ctrlX = left + 76;
+				int ctrlX = left + 76;
 		int ctrlW = PANEL_W - 76;
 		addRenderableWidget(Button.builder(Component.literal("Target: " + (editingOtherColor ? "Other Lines" : "Active Line")), b -> {
 			editingOtherColor = !editingOtherColor;
@@ -145,11 +143,27 @@ public final class SettingsScreen extends Screen {
 			this.rebuildWidgets();
 		}).bounds(ctrlX, y, ctrlW, 18).build());
 
-		addRenderableWidget(new Slider(ctrlX, y + 21, ctrlW, 18, wheelVal,
-				v -> "Brightness: " + Math.round(v * 100) + "%", v -> {
+		addRenderableWidget(new Slider(ctrlX, y + 21, ctrlW / 2 - 2, 18, wheelHue,
+				v -> "Hue: " + Math.round(v * 360) + "°", v -> {
+			wheelHue = (float) v;
+			applyWheelColor();
+		}));
+		addRenderableWidget(new Slider(ctrlX + ctrlW / 2 + 2, y + 21, ctrlW / 2 - 2, 18, wheelSat,
+				v -> "Sat: " + Math.round(v * 100) + "%", v -> {
+			wheelSat = (float) v;
+			applyWheelColor();
+		}));
+
+		addRenderableWidget(new Slider(ctrlX, y + 42, ctrlW / 3 - 2, 18, wheelVal,
+				v -> "Bright: " + Math.round(v * 100) + "%", v -> {
 			wheelVal = (float) v;
 			applyWheelColor();
 		}));
+		addRenderableWidget(new Slider(ctrlX + ctrlW / 3 + 1, y + 42, ctrlW / 3 - 2, 18, (cfg.scale - 0.6) / 1.9,
+				v -> "Size: " + String.format("%.1fx", 0.6 + v * 1.9), v -> cfg.scale = (float) (0.6 + v * 1.9)));
+		addRenderableWidget(new Slider(ctrlX + (ctrlW * 2) / 3 + 2, y + 42, ctrlW / 3 - 2, 18, cfg.hudBottomOffset / 300.0,
+				v -> "Y: " + Math.round(v * 300) + "px", v -> cfg.hudBottomOffset = (int) Math.round(v * 300)));
+
 
 		addRenderableWidget(new Slider(ctrlX, y + 42, ctrlW / 2 - 2, 18, (cfg.scale - 0.6) / 1.9,
 				v -> "Size: " + String.format("%.1fx", 0.6 + v * 1.9), v -> cfg.scale = (float) (0.6 + v * 1.9)));
