@@ -192,7 +192,7 @@ public final class SettingsScreen extends Screen {
 			this.rebuildWidgets();
 		}).bounds(left + 252, y, 80, 18).build());
 	}
-	private void initSky() {
+		private void initSky() {
 		Config cfg = SpotifyLyricsMod.config();
 		int y = winY + 54;
 		for (int i = 0; i < CustomSkyRenderer.SKY_IDS.length; i++) {
@@ -242,6 +242,7 @@ public final class SettingsScreen extends Screen {
 		if (tab == 0) {
 			drawPlayerInfo(g);
 		} else if (tab == 1) {
+			drawColorWheel(g, left + 34, winY + 102, 32);
 			int previewCol = editingOtherColor ? cfg.otherColor : cfg.activeColor;
 			g.fill(left + 2, winY + 136, left + 66, winY + 142, 0xFF000000 | previewCol);
 		} else if (tab == 2) {
@@ -253,6 +254,25 @@ public final class SettingsScreen extends Screen {
 			g.text(this.font, "Just play any song in your Spotify desktop app.",
 					left, winY + 76, 0xFFD8C8FF, true);
 		}
+	}
+
+	private void drawColorWheel(GuiGraphicsExtractor g, int cx, int cy, int radius) {
+		for (int dy = -radius; dy <= radius; dy += 2) {
+			for (int dx = -radius; dx <= radius; dx += 2) {
+				double dist = Math.sqrt(dx * dx + dy * dy);
+				if (dist <= radius) {
+					float sat = (float) (dist / radius);
+					float hue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
+					int rgb = Color.HSBtoRGB(hue, sat, wheelVal);
+					g.fill(cx + dx, cy + dy, cx + dx + 2, cy + dy + 2, 0xFF000000 | rgb);
+				}
+			}
+		}
+		double angle = wheelHue * Math.PI * 2.0;
+		int px = cx + (int) Math.round(Math.cos(angle) * wheelSat * radius);
+		int py = cy + (int) Math.round(Math.sin(angle) * wheelSat * radius);
+		g.fill(px - 2, py - 2, px + 3, py + 3, 0xFFFFFFFF);
+		g.fill(px - 1, py - 1, px + 2, py + 2, 0xFF000000);
 	}
 
 	private void drawPlayerInfo(GuiGraphicsExtractor g) {
@@ -291,36 +311,11 @@ public final class SettingsScreen extends Screen {
 		}
 
 		@Override
-		public void onClick(double mx, double my) {
-			pick(mx, my);
-		}
-
-		@Override
-		protected void onDrag(double mx, double my, double dx, double dy) {
-			pick(mx, my);
-		}
-
-		@Override
-		protected void renderWidget(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-			int radius = this.width / 2;
-			int cx = this.getX() + radius;
-			int cy = this.getY() + radius;
-			for (int dy = -radius; dy <= radius; dy += 2) {
-				for (int dx = -radius; dx <= radius; dx += 2) {
-					double dist = Math.sqrt(dx * dx + dy * dy);
-					if (dist <= radius) {
-						float sat = (float) (dist / radius);
-						float hue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
-						int rgb = Color.HSBtoRGB(hue, sat, wheelVal);
-						g.fill(cx + dx, cy + dy, cx + dx + 2, cy + dy + 2, 0xFF000000 | rgb);
-					}
-				}
+		protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+			if (this.isHovered() && org.lwjgl.glfw.GLFW.glfwGetMouseButton(
+					org.lwjgl.glfw.GLFW.glfwGetCurrentContext(), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS) {
+				pick(mouseX, mouseY);
 			}
-			double angle = wheelHue * Math.PI * 2.0;
-			int px = cx + (int) Math.round(Math.cos(angle) * wheelSat * radius);
-			int py = cy + (int) Math.round(Math.sin(angle) * wheelSat * radius);
-			g.fill(px - 2, py - 2, px + 3, py + 3, 0xFFFFFFFF);
-			g.fill(px - 1, py - 1, px + 2, py + 2, 0xFF000000);
 		}
 
 		@Override
