@@ -7,26 +7,26 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.ArrayList;
 import java.util.List;
 
-/** The always-on lyrics overlay. Appears automatically whenever Spotify is playing a song. */
 public final class LyricsHud {
 	private static String animTrack = "";
 	private static int animIndex = -2;
 	private static long animChangedAt;
 
-	private LyricsHud() {
-	}
+	private LyricsHud() {}
 
 	public static void extract(GuiGraphicsExtractor g, DeltaTracker delta) {
+		Minecraft mc = Minecraft.getInstance();
+		int screenW = mc.getWindow().getGuiScaledWidth();
+		int screenH = mc.getWindow().getGuiScaledHeight();
+
+		CustomSkyRenderer.renderSkyOverlay(g, screenW, screenH);
+
 		Config cfg = SpotifyLyricsMod.config();
 		PlaybackTracker tracker = SpotifyLyricsMod.tracker();
 		if (!cfg.lyricsEnabled || tracker == null) return;
 
 		SpotifyApi.Sample s = tracker.sample();
 		if (s == null) return;
-
-		Minecraft mc = Minecraft.getInstance();
-		int screenW = mc.getWindow().getGuiScaledWidth();
-		int screenH = mc.getWindow().getGuiScaledHeight();
 
 		String header = s.title() + " – " + s.artist() + (s.playing() ? "" : "  ⏸");
 		float progress = s.durationMs() > 0 ? (float) s.estimatedProgressMs() / s.durationMs() : -1f;
@@ -61,7 +61,7 @@ public final class LyricsHud {
 		}
 		float anim = Math.min(1f, (now - animChangedAt) / 260f);
 
-		LyricsRenderer.Model model = new LyricsRenderer.Model(header, before, current, after, progress, anim);
-		LyricsRenderer.draw(g, mc.font, cfg, screenW, screenW / 2, screenH - cfg.hudBottomOffset, model);
+		LyricsRenderer.Model model = new LyricsRenderer.Model(s.trackId(), header, before, current, after, progress, anim);
+		LyricsRenderer.draw(g, mc.font, cfg, screenW, screenH, screenW / 2, screenH - cfg.hudBottomOffset, model);
 	}
 }
