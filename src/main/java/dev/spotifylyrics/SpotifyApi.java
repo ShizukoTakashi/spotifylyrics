@@ -12,16 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
 
-/** Fast, persistent Windows Media Session bridge (100% free, zero Premium or login needed). */
 public final class SpotifyApi {
 	public record Result(boolean ok, String message) {
-		static Result ok(String m) {
-			return new Result(true, m);
-		}
-
-		static Result fail(String m) {
-			return new Result(false, m);
-		}
+		static Result ok(String m) { return new Result(true, m); }
+		static Result fail(String m) { return new Result(false, m); }
 	}
 
 	public record Sample(String trackId, String title, String artist, String album,
@@ -159,7 +153,6 @@ public final class SpotifyApi {
 			""";
 
 	private volatile Sample latestSample;
-	private volatile long latestReceivedAtMs;
 	private Process worker;
 	private BufferedWriter workerIn;
 
@@ -172,21 +165,24 @@ public final class SpotifyApi {
 			if (worker != null && worker.isAlive()) return;
 			String encoded = Base64.getEncoder().encodeToString(WORKER_SCRIPT.getBytes(StandardCharsets.UTF_16LE));
 			worker = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded)
-					.redirectErrorStream(true)
-					.start();
+					.redirectErrorStream(true).start();
 			workerIn = new BufferedWriter(new OutputStreamWriter(worker.getOutputStream(), StandardCharsets.UTF_8));
 			Thread reader = new Thread(() -> {
 				try (BufferedReader r = new BufferedReader(new InputStreamReader(worker.getInputStream(), StandardCharsets.UTF_8))) {
 					String line;
 					while ((line = r.readLine()) != null) {
 						line = line.trim();
-						if (line.equals("EMPTY")) {
-							latestSample = null;
-							latestReceivedAtMs = System.currentTimeMillis();
-						} else if (line.startsWith("{")) {
-							parseSample(line);
-						}
+						if (line.equals("EMPTY")) latestSample = null;
+						else if (line.startsWith("{")) parseSample(line);
 					}
-				} catch (Exception ignored) {
-				}
+				} catch (Exception ignored) {}
 			}, "spotifylyrics-winmedia");
+			reader.setDaemon(true);
+			reader.start();
+		} catch (Exception e) {
+			SpotifyLyricsMod.LOGGER.warn("Could not start Windows media worker", e);
+		}
+	}
+
+	private void parseSample(String json) {
+		try {
