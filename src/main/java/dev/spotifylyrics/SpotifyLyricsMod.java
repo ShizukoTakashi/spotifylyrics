@@ -59,8 +59,6 @@ public final class SpotifyLyricsMod implements ClientModInitializer {
 		auth = new SpotifyAuth(config, http);
 		api = new SpotifyApi(auth, http);
 		tracker = new PlaybackTracker(auth, api, http);
-		// Starts polling immediately. Once you've logged in once, lyrics appear by themselves
-		// whenever a song plays in Spotify, with no commands needed.
 		tracker.start();
 
 		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT,
@@ -68,7 +66,7 @@ public final class SpotifyLyricsMod implements ClientModInitializer {
 
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
 		settingsKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-				"key." + MOD_ID + ".settings", InputConstants.Type.KEYSYM, InputConstants.KEY_K, category));
+				"key." + MOD_ID + ".settings", InputConstants.Type.KEYBOARD, InputConstants.KEY_K, category));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (settingsKey.consumeClick()) {
@@ -147,8 +145,8 @@ public final class SpotifyLyricsMod implements ClientModInitializer {
 	}
 
 	private static void openSettings(Minecraft client) {
-		if (!(client.screen instanceof SettingsScreen)) {
-			client.setScreen(new SettingsScreen(client.screen));
+		if (!(client.gui.screen() instanceof SettingsScreen)) {
+			client.gui.setScreen(new SettingsScreen(client.gui.screen()));
 		}
 	}
 
