@@ -1,12 +1,8 @@
 package dev.spotifylyrics;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.util.Mth;
-import org.joml.Matrix4f;
 
 import java.util.Random;
 
@@ -19,11 +15,11 @@ public final class CustomSkyRenderer {
 			"Vanilla Sky", "Saturn Space (4K)", "Black Hole Space", "Planets & Stars", "Deep Starfield", "Pink-Orange Sunset"
 	};
 
-	private static final float[] STAR_X = new float[450];
-	private static final float[] STAR_Y = new float[450];
-	private static final float[] STAR_Z = new float[450];
-	private static final int[] STAR_COL = new int[450];
-	private static final int[] STAR_SIZE = new int[450];
+	private static final float[] STAR_X = new float[260];
+	private static final float[] STAR_Y = new float[260];
+	private static final float[] STAR_Z = new float[260];
+	private static final int[] STAR_COL = new int[260];
+	private static final int[] STAR_SIZE = new int[260];
 
 	static {
 		Random r = new Random(42069L);
@@ -52,16 +48,15 @@ public final class CustomSkyRenderer {
 		for (int i = 0; i < SKY_IDS.length; i++) {
 			if (SKY_IDS[i].equals(id)) return SKY_IDS[(i + 1) % SKY_IDS.length];
 		}
-		return SKY_IDS[1];
+		return SKY_IDS[0];
 	}
 
-	/** Draws sky backdrop & horizon lyrics in HUD layer when looking up at the sky. */
 	public static void renderSkyOverlay(GuiGraphicsExtractor g, int w, int h) {
 		Config cfg = SpotifyLyricsMod.config();
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.level == null) return;
 
-		float pitch = mc.player.getXRot(); // -90 = straight up, 0 = horizon, +90 = straight down
+		float pitch = mc.player.getXRot();
 		float yaw = Mth.wrapDegrees(mc.player.getYRot());
 		String mode = cfg.skyTheme;
 
@@ -91,7 +86,6 @@ public final class CustomSkyRenderer {
 			int a = Math.round(vis * 215);
 			g.fill(0, y1, w, y2, (a << 24) | (col & 0xFFFFFF));
 		}
-		// Soft sunset clouds (no sun!)
 		long time = System.currentTimeMillis() / 120L;
 		for (int c = 0; c < 14; c++) {
 			int cx = Math.floorMod((int) (c * 190 - yaw * 4.5f + (time % 2000)), w + 240) - 120;
@@ -121,7 +115,6 @@ public final class CustomSkyRenderer {
 			g.fill(0, y1, w, y2, (a << 24) | (col & 0xFFFFFF));
 		}
 
-		// Crisp 4K starfield
 		float yawRad = (float) Math.toRadians(yaw);
 		float cosY = Mth.cos(yawRad), sinY = Mth.sin(yawRad);
 		long twinkle = System.currentTimeMillis() / 350L;
@@ -143,7 +136,6 @@ public final class CustomSkyRenderer {
 		int a = Math.round(vis * 255);
 
 		if ("saturn".equals(mode)) {
-			// Saturn planet body + golden-cream concentric rings
 			drawDisc(g, objX, objY, 34, (a << 24) | 0xE8C88B);
 			drawDisc(g, objX - 4, objY - 4, 28, (a << 24) | 0xF5DCA8);
 			for (int r = 42; r <= 68; r += 3) {
@@ -151,7 +143,6 @@ public final class CustomSkyRenderer {
 				drawEllipseRing(g, objX, objY, r, r / 3, ringCol);
 			}
 		} else if ("black_hole".equals(mode)) {
-			// Glowing orange-gold accretion disk + event horizon shadow
 			for (int r = 74; r >= 34; r -= 2) {
 				int c = lerpColor(0xFF4500, 0xFFE89E, (74 - r) / 40f);
 				drawEllipseRing(g, objX, objY, r, r / 4, (a << 24) | c);
