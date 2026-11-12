@@ -42,7 +42,8 @@ public final class SettingsScreen extends Screen {
 	@Override
 	public void onClose() {
 		SpotifyLyricsMod.config().save();
-		this.minecraft.setScreen(parent);
+		this.minecraft.gui.setScreen(parent);
+    
 	}
 
 	// ------------------------------------------------------------------ layout
@@ -212,7 +213,7 @@ public final class SettingsScreen extends Screen {
 		addRenderableWidget(id);
 
 		addRenderableWidget(Button.builder(Component.literal("Log in"), b -> {
-			this.minecraft.setScreen(null);
+			this.minecraft.gui.setScreen(null);
 			SpotifyLyricsMod.startLogin();
 		}).bounds(left, 96, 148, 20).build());
 		addRenderableWidget(Button.builder(Component.literal("Log out"), b -> {
