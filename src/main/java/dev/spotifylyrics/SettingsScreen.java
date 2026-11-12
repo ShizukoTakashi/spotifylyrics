@@ -2,8 +2,10 @@ package dev.spotifylyrics;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -34,9 +36,9 @@ public final class SettingsScreen extends Screen {
 		Config cfg = SpotifyLyricsMod.config();
 		int rgb = editingOtherColor ? cfg.otherColor : cfg.activeColor;
 		float[] hsb = Color.RGBtoHSB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, null);
-		wheelHue = hsb;
-		wheelSat = hsb;
-		wheelVal = hsb;
+		wheelHue = hsb[0];
+		wheelSat = hsb[1];
+		wheelVal = hsb[2];
 	}
 
 	@Override
@@ -133,6 +135,8 @@ public final class SettingsScreen extends Screen {
 		}).bounds(left, y, PANEL_W, 18).build());
 		y += 22;
 
+		addRenderableWidget(new ColorWheelWidget(left + 2, y, 64, 64));
+
 		int ctrlX = left + 76;
 		int ctrlW = PANEL_W - 76;
 		addRenderableWidget(Button.builder(Component.literal("Target: " + (editingOtherColor ? "Other Lines" : "Active Line")), b -> {
@@ -226,34 +230,6 @@ public final class SettingsScreen extends Screen {
 	}
 
 	@Override
-	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		if (tab == 1 && button == 0 && handleWheelInput(mouseX, mouseY)) return true;
-		return super.mouseClicked(mouseX, mouseY, button);
-	}
-
-	@Override
-	public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-		if (tab == 1 && button == 0 && handleWheelInput(mouseX, mouseY)) return true;
-		return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-	}
-
-	private boolean handleWheelInput(double mx, double my) {
-		int cx = left + 34;
-		int cy = winY + 104;
-		int radius = 32;
-		double dx = mx - cx;
-		double dy = my - cy;
-		double dist = Math.sqrt(dx * dx + dy * dy);
-		if (dist <= radius + 3) {
-			wheelSat = (float) Mth.clamp(dist / radius, 0.0, 1.0);
-			wheelHue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
-			applyWheelColor();
-			return true;
-		}
-		return false;
-	}
-
-	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
 		g.fill(winX - 2, winY - 2, winX + WIN_W + 2, winY + WIN_H + 2, 0xFF8A5CF6);
 		g.fill(winX, winY, winX + WIN_W, winY + WIN_H, 0xFF170D2E);
@@ -266,9 +242,8 @@ public final class SettingsScreen extends Screen {
 		if (tab == 0) {
 			drawPlayerInfo(g);
 		} else if (tab == 1) {
-			drawColorWheel(g, left + 34, winY + 104, 32);
 			int previewCol = editingOtherColor ? cfg.otherColor : cfg.activeColor;
-			g.fill(left + 2, winY + 140, left + 66, winY + 146, 0xFF000000 | previewCol);
+			g.fill(left + 2, winY + 136, left + 66, winY + 142, 0xFF000000 | previewCol);
 		} else if (tab == 2) {
 			g.text(this.font, "Choose a custom sky backdrop (replaces vanilla sky when looking up):",
 					left, winY + 168, 0xFFCBB8F5, true);
@@ -278,25 +253,6 @@ public final class SettingsScreen extends Screen {
 			g.text(this.font, "Just play any song in your Spotify desktop app.",
 					left, winY + 76, 0xFFD8C8FF, true);
 		}
-	}
-
-	private void drawColorWheel(GuiGraphicsExtractor g, int cx, int cy, int radius) {
-		for (int dy = -radius; dy <= radius; dy += 2) {
-			for (int dx = -radius; dx <= radius; dx += 2) {
-				double dist = Math.sqrt(dx * dx + dy * dy);
-				if (dist <= radius) {
-					float sat = (float) (dist / radius);
-					float hue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
-					int rgb = Color.HSBtoRGB(hue, sat, wheelVal);
-					g.fill(cx + dx, cy + dy, cx + dx + 2, cy + dy + 2, 0xFF000000 | rgb);
-				}
-			}
-		}
-		double angle = wheelHue * Math.PI * 2.0;
-		int px = cx + (int) Math.round(Math.cos(angle) * wheelSat * radius);
-		int py = cy + (int) Math.round(Math.sin(angle) * wheelSat * radius);
-		g.fill(px - 2, py - 2, px + 3, py + 3, 0xFFFFFFFF);
-		g.fill(px - 1, py - 1, px + 2, py + 2, 0xFF000000);
 	}
 
 	private void drawPlayerInfo(GuiGraphicsExtractor g) {
@@ -315,6 +271,60 @@ public final class SettingsScreen extends Screen {
 		}
 		String msg = tr.message();
 		if (!msg.isEmpty()) g.text(this.font, msg, left, winY + 176, 0xFFD8C8FF, true);
+	}
+
+	private final class ColorWheelWidget extends AbstractWidget {
+		ColorWheelWidget(int x, int y, int w, int h) {
+			super(x, y, w, h, Component.literal("Colour Wheel"));
+		}
+
+		private void pick(double mx, double my) {
+			int radius = this.width / 2;
+			int cx = this.getX() + radius;
+			int cy = this.getY() + radius;
+			double dx = mx - cx;
+			double dy = my - cy;
+			double dist = Math.sqrt(dx * dx + dy * dy);
+			wheelSat = (float) Mth.clamp(dist / radius, 0.0, 1.0);
+			wheelHue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
+			applyWheelColor();
+		}
+
+		@Override
+		public void onClick(double mx, double my) {
+			pick(mx, my);
+		}
+
+		@Override
+		protected void onDrag(double mx, double my, double dx, double dy) {
+			pick(mx, my);
+		}
+
+		@Override
+		protected void renderWidget(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
+			int radius = this.width / 2;
+			int cx = this.getX() + radius;
+			int cy = this.getY() + radius;
+			for (int dy = -radius; dy <= radius; dy += 2) {
+				for (int dx = -radius; dx <= radius; dx += 2) {
+					double dist = Math.sqrt(dx * dx + dy * dy);
+					if (dist <= radius) {
+						float sat = (float) (dist / radius);
+						float hue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
+						int rgb = Color.HSBtoRGB(hue, sat, wheelVal);
+						g.fill(cx + dx, cy + dy, cx + dx + 2, cy + dy + 2, 0xFF000000 | rgb);
+					}
+				}
+			}
+			double angle = wheelHue * Math.PI * 2.0;
+			int px = cx + (int) Math.round(Math.cos(angle) * wheelSat * radius);
+			int py = cy + (int) Math.round(Math.sin(angle) * wheelSat * radius);
+			g.fill(px - 2, py - 2, px + 3, py + 3, 0xFFFFFFFF);
+			g.fill(px - 1, py - 1, px + 2, py + 2, 0xFF000000);
+		}
+
+		@Override
+		protected void updateWidgetNarration(NarrationElementOutput out) {}
 	}
 
 	private static final class Slider extends AbstractSliderButton {
