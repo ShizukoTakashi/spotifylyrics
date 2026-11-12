@@ -20,7 +20,7 @@ public final class SpotifyApi {
 
 	public record Sample(String trackId, String title, String artist, String album,
 						 long durationMs, long progressMs, boolean playing, long takenAtNanos,
-						 int volumePercent) {
+						 int volumePercent, String artBase64) {
 		public long estimatedProgressMs() {
 			if (!playing) return progressMs;
 			long est = progressMs + (System.nanoTime() - takenAtNanos) / 1_000_000L;
@@ -197,7 +197,7 @@ public final class SpotifyApi {
 			long durMs = o.has("durMs") && !o.get("durMs").isJsonNull() ? o.get("durMs").getAsLong() : 0;
 			int vol = o.has("vol") && !o.get("vol").isJsonNull() ? o.get("vol").getAsInt() : -1;
 			String trackId = (artist + " - " + title).toLowerCase();
-			latestSample = new Sample(trackId, title, artist, album, durMs, posMs, playing, System.nanoTime(), vol);
+			latestSample = new Sample(trackId, title, artist, album, durMs, posMs, playing, System.nanoTime(), vol, "");
 		} catch (Exception ignored) {}
 	}
 
