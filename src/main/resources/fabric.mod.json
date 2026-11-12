@@ -1,0 +1,25 @@
+{
+	"schemaVersion": 1,
+	"id": "spotifylyrics",
+	"version": "${version}",
+	"name": "Lyrics HUD",
+	"description": "Shows synced lyrics for whatever you play in Spotify, right on your Minecraft screen. Pick fonts and colours, and control playback from an in-game settings screen.",
+	"authors": ["Your Name"],
+	"contact": {
+		"homepage": "https://modrinth.com/mod/spotifylyrics",
+		"sources": "https://github.com/YOUR-NAME/spotifylyrics",
+		"issues": "https://github.com/YOUR-NAME/spotifylyrics/issues"
+	},
+	"license": "MIT",
+	"icon": "assets/spotifylyrics/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.spotifylyrics.SpotifyLyricsMod"]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.0",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

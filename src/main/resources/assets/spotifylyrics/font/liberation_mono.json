@@ -1,0 +1,7 @@
+{
+	"providers": [
+		{ "type": "ttf", "file": "spotifylyrics:liberation_mono.ttf", "shift": [0, 0], "size": 11.0, "oversample": 4.0 },
+		{ "type": "reference", "id": "minecraft:include/default" },
+		{ "type": "reference", "id": "minecraft:include/unifont" }
+	]
+}
