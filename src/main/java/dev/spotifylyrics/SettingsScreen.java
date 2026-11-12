@@ -2,13 +2,10 @@ package dev.spotifylyrics;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
 
 import java.awt.Color;
 
@@ -135,7 +132,7 @@ public final class SettingsScreen extends Screen {
 		}).bounds(left, y, PANEL_W, 18).build());
 		y += 22;
 
-				int ctrlX = left + 76;
+		int ctrlX = left + 76;
 		int ctrlW = PANEL_W - 76;
 		addRenderableWidget(Button.builder(Component.literal("Target: " + (editingOtherColor ? "Other Lines" : "Active Line")), b -> {
 			editingOtherColor = !editingOtherColor;
@@ -162,12 +159,6 @@ public final class SettingsScreen extends Screen {
 		addRenderableWidget(new Slider(ctrlX + ctrlW / 3 + 1, y + 42, ctrlW / 3 - 2, 18, (cfg.scale - 0.6) / 1.9,
 				v -> "Size: " + String.format("%.1fx", 0.6 + v * 1.9), v -> cfg.scale = (float) (0.6 + v * 1.9)));
 		addRenderableWidget(new Slider(ctrlX + (ctrlW * 2) / 3 + 2, y + 42, ctrlW / 3 - 2, 18, cfg.hudBottomOffset / 300.0,
-				v -> "Y: " + Math.round(v * 300) + "px", v -> cfg.hudBottomOffset = (int) Math.round(v * 300)));
-
-
-		addRenderableWidget(new Slider(ctrlX, y + 42, ctrlW / 2 - 2, 18, (cfg.scale - 0.6) / 1.9,
-				v -> "Size: " + String.format("%.1fx", 0.6 + v * 1.9), v -> cfg.scale = (float) (0.6 + v * 1.9)));
-		addRenderableWidget(new Slider(ctrlX + ctrlW / 2 + 2, y + 42, ctrlW / 2 - 2, 18, cfg.hudBottomOffset / 300.0,
 				v -> "Y: " + Math.round(v * 300) + "px", v -> cfg.hudBottomOffset = (int) Math.round(v * 300)));
 		y += 66;
 
@@ -206,7 +197,7 @@ public final class SettingsScreen extends Screen {
 			this.rebuildWidgets();
 		}).bounds(left + 252, y, 80, 18).build());
 	}
-		private void initSky() {
+	private void initSky() {
 		Config cfg = SpotifyLyricsMod.config();
 		int y = winY + 54;
 		for (int i = 0; i < CustomSkyRenderer.SKY_IDS.length; i++) {
@@ -305,35 +296,6 @@ public final class SettingsScreen extends Screen {
 		}
 		String msg = tr.message();
 		if (!msg.isEmpty()) g.text(this.font, msg, left, winY + 176, 0xFFD8C8FF, true);
-	}
-
-	private final class ColorWheelWidget extends AbstractWidget {
-		ColorWheelWidget(int x, int y, int w, int h) {
-			super(x, y, w, h, Component.literal("Colour Wheel"));
-		}
-
-		private void pick(double mx, double my) {
-			int radius = this.width / 2;
-			int cx = this.getX() + radius;
-			int cy = this.getY() + radius;
-			double dx = mx - cx;
-			double dy = my - cy;
-			double dist = Math.sqrt(dx * dx + dy * dy);
-			wheelSat = (float) Mth.clamp(dist / radius, 0.0, 1.0);
-			wheelHue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
-			applyWheelColor();
-		}
-
-		@Override
-		protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-			if (this.isHovered() && org.lwjgl.glfw.GLFW.glfwGetMouseButton(
-					org.lwjgl.glfw.GLFW.glfwGetCurrentContext(), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS) {
-				pick(mouseX, mouseY);
-			}
-		}
-
-		@Override
-		protected void updateWidgetNarration(NarrationElementOutput out) {}
 	}
 
 	private static final class Slider extends AbstractSliderButton {
