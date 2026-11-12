@@ -1,37 +1,42 @@
 package dev.spotifylyrics;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import java.awt.Color;
 
-/** In-game settings: transport controls, fonts, colours and the Spotify account. Opened with the K key. */
 public final class SettingsScreen extends Screen {
-	private static final int PANEL_W = 300;
-	private static final int[] PALETTE = {
-			0x1ED760, 0xFFFFFF, 0xFFD93B, 0xFF8A3D, 0xFF4D4D, 0xFF7AC6,
-			0xB388FF, 0x4DA3FF, 0x3DDCFF, 0x2EE6A6, 0xC8C8C8
-	};
+	private static final int WIN_W = 356;
+	private static final int WIN_H = 248;
+	private static final int PANEL_W = 332;
 	private static final String[] PANEL_NAMES = {"None", "Soft", "Solid"};
 	private static int lastTab = 0;
 
 	private final Screen parent;
 	private int tab = lastTab;
-	private int left;
-	private final List<int[]> swatches = new ArrayList<>(); // x, y, rgb
+	private int winX, winY, left;
 	private EditBox searchBox;
-	private Button playPause;
+	private boolean editingOtherColor = false;
+	private float wheelHue = 0.75f, wheelSat = 0.45f, wheelVal = 1.0f;
 
 	public SettingsScreen(Screen parent) {
 		super(Component.literal("Spotify Lyrics"));
 		this.parent = parent;
+		syncWheelFromConfig();
+	}
+
+	private void syncWheelFromConfig() {
+		Config cfg = SpotifyLyricsMod.config();
+		int rgb = editingOtherColor ? cfg.otherColor : cfg.activeColor;
+		float[] hsb = Color.RGBtoHSB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, null);
+		wheelHue = hsb;
+		wheelSat = hsb;
+		wheelVal = hsb;
 	}
 
 	@Override
@@ -43,17 +48,16 @@ public final class SettingsScreen extends Screen {
 	public void onClose() {
 		SpotifyLyricsMod.config().save();
 		this.minecraft.gui.setScreen(parent);
-    
 	}
-
-	// ------------------------------------------------------------------ layout
 
 	@Override
 	protected void init() {
-		swatches.clear();
-		left = (this.width - PANEL_W) / 2;
+		winX = (this.width - WIN_W) / 2;
+		winY = (this.height - WIN_H) / 2;
+		left = winX + 12;
 
-		String[] names = {"Player", "Appearance", "Account"};
+		String[] names = {"Player", "Appearance", "Sky", "Account"};
+		int tabW = (PANEL_W - 12) / 4;
 		for (int i = 0; i < names.length; i++) {
 			final int idx = i;
 			Button b = Button.builder(Component.literal(names[i]), btn -> {
@@ -61,17 +65,18 @@ public final class SettingsScreen extends Screen {
 				lastTab = idx;
 				SpotifyLyricsMod.config().save();
 				this.rebuildWidgets();
-			}).bounds(left + i * 102, 10, 96, 20).build();
+			}).bounds(left + i * (tabW + 4), winY + 24, tabW, 18).build();
 			b.active = tab != i;
 			addRenderableWidget(b);
 		}
 
 		addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
-				.bounds(left, this.height - 26, PANEL_W, 20).build());
+				.bounds(left, winY + WIN_H - 26, PANEL_W, 18).build());
 
 		switch (tab) {
 			case 0 -> initPlayer();
 			case 1 -> initAppearance();
+			case 2 -> initSky();
 			default -> initAccount();
 		}
 	}
@@ -79,214 +84,239 @@ public final class SettingsScreen extends Screen {
 	private void initPlayer() {
 		PlaybackTracker tr = SpotifyLyricsMod.tracker();
 		SpotifyApi api = SpotifyLyricsMod.api();
-		int y = 86;
+		int y = winY + 96;
 		addRenderableWidget(Button.builder(Component.literal("-10s"), b -> seekBy(-10_000))
-				.bounds(left, y, 44, 20).build());
+				.bounds(left, y, 48, 20).build());
 		addRenderableWidget(Button.builder(Component.literal("⏮ Prev"), b -> tr.act(api::previous))
-				.bounds(left + 48, y, 56, 20).build());
-		playPause = Button.builder(Component.literal("Play / Pause"), b -> {
+				.bounds(left + 52, y, 62, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("Play / Pause"), b -> {
 			SpotifyApi.Sample s = tr.sample();
 			if (s != null && s.playing()) tr.act(api::pause);
 			else tr.act(api::resume);
-		}).bounds(left + 108, y, 84, 20).build();
-		addRenderableWidget(playPause);
+		}).bounds(left + 118, y, 96, 20).build());
 		addRenderableWidget(Button.builder(Component.literal("Next ⏭"), b -> tr.act(api::next))
-				.bounds(left + 196, y, 56, 20).build());
+				.bounds(left + 218, y, 62, 20).build());
 		addRenderableWidget(Button.builder(Component.literal("+10s"), b -> seekBy(10_000))
-				.bounds(left + 256, y, 44, 20).build());
+				.bounds(left + 284, y, 48, 20).build());
 
 		SpotifyApi.Sample s = tr.sample();
 		double vol = s != null && s.volumePercent() >= 0 ? s.volumePercent() / 100.0 : 0.5;
-		addRenderableWidget(new Slider(left, 114, PANEL_W, 20, vol, v -> "Spotify volume: " + Math.round(v * 100) + "%",
+		addRenderableWidget(new Slider(left, winY + 122, PANEL_W, 20, vol, v -> "Spotify Volume: " + Math.round(v * 100) + "%",
 				v -> tr.setVolumeDebounced((int) Math.round(v * 100))));
 
-		searchBox = new EditBox(this.font, left, 146, 220, 20, Component.literal("Search"));
+		searchBox = new EditBox(this.font, left, winY + 148, 248, 20, Component.literal("Search"));
 		searchBox.setMaxLength(100);
-		searchBox.setHint(Component.literal("Search a song or artist..."));
+		searchBox.setHint(Component.literal("Search song or artist..."));
 		addRenderableWidget(searchBox);
 		addRenderableWidget(Button.builder(Component.literal("Play"), b -> {
 			String q = searchBox.getValue().trim();
 			if (!q.isEmpty()) tr.act(() -> api.searchAndPlay(q));
-		}).bounds(left + 224, 146, 76, 20).build());
+		}).bounds(left + 252, winY + 148, 80, 20).build());
 	}
 
 	private void seekBy(long deltaMs) {
 		SpotifyApi.Sample s = SpotifyLyricsMod.tracker().sample();
 		if (s == null) return;
-		long target = Math.max(0, Math.min(s.durationMs() - 500, s.estimatedProgressMs() + deltaMs));
+		long target = Math.max(0, s.estimatedProgressMs() + deltaMs);
 		SpotifyLyricsMod.tracker().act(() -> SpotifyLyricsMod.api().seek(target));
 	}
 
 	private void initAppearance() {
 		Config cfg = SpotifyLyricsMod.config();
-		int y = 40;
+		int y = winY + 48;
 
-		// font cycle (the label is drawn in the chosen font so it doubles as a preview)
 		Fonts.FontChoice fc = Fonts.byId(cfg.font);
-		addRenderableWidget(Button.builder(LyricsRenderer.styled("Font: " + fc.label() + "  (click for next)", fc, false), b -> {
+		addRenderableWidget(Button.builder(LyricsRenderer.styled("Font: " + fc.label() + "  (click)", fc, false), b -> {
 			cfg.font = Fonts.next(cfg.font).id();
 			cfg.save();
 			this.rebuildWidgets();
-		}).bounds(left, y, PANEL_W, 20).build());
-		y += 30;
+		}).bounds(left, y, PANEL_W, 18).build());
+		y += 22;
 
-		y = colourRow(y, cfg.activeColor, c -> cfg.activeColor = c);
-		y = colourRow(y, cfg.otherColor, c -> cfg.otherColor = c);
+		int ctrlX = left + 76;
+		int ctrlW = PANEL_W - 76;
+		addRenderableWidget(Button.builder(Component.literal("Target: " + (editingOtherColor ? "Other Lines" : "Active Line")), b -> {
+			editingOtherColor = !editingOtherColor;
+			syncWheelFromConfig();
+			this.rebuildWidgets();
+		}).bounds(ctrlX, y, ctrlW, 18).build());
 
-		addRenderableWidget(new Slider(left, y, 148, 20, (cfg.scale - 0.6) / 1.9,
-				v -> "Text size: " + String.format("%.2fx", 0.6 + v * 1.9), v -> cfg.scale = (float) (0.6 + v * 1.9)));
-		addRenderableWidget(new Slider(left + 152, y, 148, 20, cfg.hudBottomOffset / 300.0,
-				v -> "Height: " + Math.round(v * 300) + "px", v -> cfg.hudBottomOffset = (int) Math.round(v * 300)));
-		y += 24;
+		addRenderableWidget(new Slider(ctrlX, y + 21, ctrlW, 18, wheelVal,
+				v -> "Brightness: " + Math.round(v * 100) + "%", v -> {
+			wheelVal = (float) v;
+			applyWheelColor();
+		}));
 
-		addRenderableWidget(new Slider(left, y, 148, 20, (cfg.lyricsOffsetMs + 2000) / 4000.0,
-				v -> "Timing: " + (Math.round(v * 4000) - 2000) + "ms", v -> cfg.lyricsOffsetMs = (int) Math.round(v * 4000) - 2000));
-		addRenderableWidget(Button.builder(Component.literal("Lines shown: " + cfg.linesShown), b -> {
+		addRenderableWidget(new Slider(ctrlX, y + 42, ctrlW / 2 - 2, 18, (cfg.scale - 0.6) / 1.9,
+				v -> "Size: " + String.format("%.1fx", 0.6 + v * 1.9), v -> cfg.scale = (float) (0.6 + v * 1.9)));
+		addRenderableWidget(new Slider(ctrlX + ctrlW / 2 + 2, y + 42, ctrlW / 2 - 2, 18, cfg.hudBottomOffset / 300.0,
+				v -> "Y: " + Math.round(v * 300) + "px", v -> cfg.hudBottomOffset = (int) Math.round(v * 300)));
+		y += 66;
+
+		addRenderableWidget(Button.builder(Component.literal("Layout: " + (cfg.scatteredMode ? "Scattered" : "Centered")), b -> {
+			cfg.scatteredMode = !cfg.scatteredMode;
+			this.rebuildWidgets();
+		}).bounds(left, y, 164, 18).build());
+		addRenderableWidget(Button.builder(Component.literal("Sky Horizon: " + (cfg.skyHorizonMode ? "On" : "Off")), b -> {
+			cfg.skyHorizonMode = !cfg.skyHorizonMode;
+			this.rebuildWidgets();
+		}).bounds(left + 168, y, 164, 18).build());
+		y += 21;
+
+		addRenderableWidget(Button.builder(Component.literal("Cover Art: " + (cfg.showCoverArt ? "On" : "Off")), b -> {
+			cfg.showCoverArt = !cfg.showCoverArt;
+			this.rebuildWidgets();
+		}).bounds(left, y, 108, 18).build());
+		addRenderableWidget(Button.builder(Component.literal("Lines: " + cfg.linesShown), b -> {
 			cfg.linesShown = cfg.linesShown == 1 ? 3 : cfg.linesShown == 3 ? 5 : 1;
 			this.rebuildWidgets();
-		}).bounds(left + 152, y, 148, 20).build());
-		y += 24;
-
+		}).bounds(left + 112, y, 108, 18).build());
 		addRenderableWidget(Button.builder(Component.literal("Panel: " + PANEL_NAMES[cfg.panelStyle]), b -> {
 			cfg.panelStyle = (cfg.panelStyle + 1) % 3;
 			this.rebuildWidgets();
-		}).bounds(left, y, 148, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("Bold current: " + (cfg.boldActive ? "On" : "Off")), b -> {
+		}).bounds(left + 224, y, 108, 18).build());
+		y += 21;
+
+		addRenderableWidget(new Slider(left, y, 164, 18, (cfg.lyricsOffsetMs + 2000) / 4000.0,
+				v -> "Sync: " + (Math.round(v * 4000) - 2000) + "ms", v -> cfg.lyricsOffsetMs = (int) Math.round(v * 4000) - 2000));
+		addRenderableWidget(Button.builder(Component.literal("Bold: " + (cfg.boldActive ? "On" : "Off")), b -> {
 			cfg.boldActive = !cfg.boldActive;
 			this.rebuildWidgets();
-		}).bounds(left + 152, y, 148, 20).build());
-		y += 24;
-
-		addRenderableWidget(Button.builder(Component.literal("Title: " + (cfg.showTitle ? "On" : "Off")), b -> {
-			cfg.showTitle = !cfg.showTitle;
-			this.rebuildWidgets();
-		}).bounds(left, y, 98, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("Progress: " + (cfg.showProgress ? "On" : "Off")), b -> {
-			cfg.showProgress = !cfg.showProgress;
-			this.rebuildWidgets();
-		}).bounds(left + 101, y, 98, 20).build());
+		}).bounds(left + 168, y, 80, 18).build());
 		addRenderableWidget(Button.builder(Component.literal("Lyrics: " + (cfg.lyricsEnabled ? "On" : "Off")), b -> {
 			cfg.lyricsEnabled = !cfg.lyricsEnabled;
 			this.rebuildWidgets();
-		}).bounds(left + 202, y, 98, 20).build());
+		}).bounds(left + 252, y, 80, 18).build());
 	}
-
-	/** A row of colour swatches plus a hex box. Returns the y for the next row. */
-	private int colourRow(int y, int current, Consumer<Integer> setter) {
-		int sy = y + 11;
-		for (int i = 0; i < PALETTE.length; i++) {
-			final int rgb = PALETTE[i];
-			int sx = left + i * 16;
-			addRenderableWidget(Button.builder(Component.empty(), b -> {
-				setter.accept(rgb);
-				SpotifyLyricsMod.config().save();
+	private void initSky() {
+		Config cfg = SpotifyLyricsMod.config();
+		int y = winY + 54;
+		for (int i = 0; i < CustomSkyRenderer.SKY_IDS.length; i++) {
+			final String id = CustomSkyRenderer.SKY_IDS[i];
+			String name = CustomSkyRenderer.SKY_NAMES[i];
+			int col = i % 2;
+			int row = i / 2;
+			Button b = Button.builder(Component.literal((id.equals(cfg.skyTheme) ? "✦ " : "") + name), btn -> {
+				cfg.skyTheme = id;
+				cfg.save();
 				this.rebuildWidgets();
-			}).bounds(sx, sy, 14, 14).build());
-			swatches.add(new int[]{sx, sy, rgb});
+			}).bounds(left + col * 168, y + row * 26, 164, 22).build();
+			b.active = !id.equals(cfg.skyTheme);
+			addRenderableWidget(b);
 		}
-		EditBox hex = new EditBox(this.font, left + 182, sy - 3, 62, 20, Component.literal("hex"));
-		hex.setMaxLength(7);
-		hex.setValue(String.format("#%06X", current & 0xFFFFFF));
-		hex.setResponder(text -> {
-			String t = text.startsWith("#") ? text.substring(1) : text;
-			if (t.length() == 6) {
-				try {
-					setter.accept(Integer.parseInt(t, 16));
-				} catch (NumberFormatException ignored) {
-				}
-			}
-		});
-		addRenderableWidget(hex);
-		return y + 34;
+		addRenderableWidget(Button.builder(Component.literal("Sky Horizon Lyrics: " + (cfg.skyHorizonMode ? "On" : "Off")), b -> {
+			cfg.skyHorizonMode = !cfg.skyHorizonMode;
+			cfg.save();
+			this.rebuildWidgets();
+		}).bounds(left, y + 86, PANEL_W, 20).build());
 	}
 
 	private void initAccount() {
-		Config cfg = SpotifyLyricsMod.config();
-		EditBox id = new EditBox(this.font, left, 54, PANEL_W, 20, Component.literal("Client ID"));
-		id.setMaxLength(64);
-		id.setHint(Component.literal("Paste your Spotify Client ID here"));
-		id.setValue(cfg.clientId == null ? "" : cfg.clientId);
-		id.setResponder(t -> {
-			cfg.clientId = t.trim();
-			cfg.save();
-		});
-		addRenderableWidget(id);
-
-		addRenderableWidget(Button.builder(Component.literal("Log in"), b -> {
-			this.minecraft.gui.setScreen(null);
-			SpotifyLyricsMod.startLogin();
-		}).bounds(left, 96, 148, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("Log out"), b -> {
-			SpotifyLyricsMod.auth().logout();
-			this.rebuildWidgets();
-		}).bounds(left + 152, 96, 148, 20).build());
-		addRenderableWidget(Button.builder(Component.literal("Copy redirect URI to clipboard"), b ->
-				this.minecraft.keyboardHandler.setClipboard(SpotifyAuth.REDIRECT_URI))
-				.bounds(left, 204, PANEL_W, 20).build());
+		addRenderableWidget(Button.builder(Component.literal("Refresh Windows Media Connection"), b -> {
+			SpotifyLyricsMod.tracker().pollSoon();
+			SpotifyLyricsMod.say("Connected via Windows Media (Free Mode Active).");
+		}).bounds(left, winY + 96, PANEL_W, 20).build());
 	}
 
-	// --------------------------------------------------------------- rendering
+	private void applyWheelColor() {
+		int rgb = Color.HSBtoRGB(wheelHue, wheelSat, wheelVal) & 0xFFFFFF;
+		Config cfg = SpotifyLyricsMod.config();
+		if (editingOtherColor) cfg.otherColor = rgb;
+		else cfg.activeColor = rgb;
+	}
+
+	@Override
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		if (tab == 1 && button == 0 && handleWheelInput(mouseX, mouseY)) return true;
+		return super.mouseClicked(mouseX, mouseY, button);
+	}
+
+	@Override
+	public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+		if (tab == 1 && button == 0 && handleWheelInput(mouseX, mouseY)) return true;
+		return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+	}
+
+	private boolean handleWheelInput(double mx, double my) {
+		int cx = left + 34;
+		int cy = winY + 104;
+		int radius = 32;
+		double dx = mx - cx;
+		double dy = my - cy;
+		double dist = Math.sqrt(dx * dx + dy * dy);
+		if (dist <= radius + 3) {
+			wheelSat = (float) Mth.clamp(dist / radius, 0.0, 1.0);
+			wheelHue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
+			applyWheelColor();
+			return true;
+		}
+		return false;
+	}
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
-		super.extractRenderState(g, mouseX, mouseY, delta);
+		g.fill(winX - 2, winY - 2, winX + WIN_W + 2, winY + WIN_H + 2, 0xFF8A5CF6);
+		g.fill(winX, winY, winX + WIN_W, winY + WIN_H, 0xFF170D2E);
+		g.fill(winX + 4, winY + 4, winX + WIN_W - 4, winY + 20, 0xFF26154A);
+		g.text(this.font, "♪  Spotify Lyrics Studio", winX + 10, winY + 8, 0xFFE9DDFF, true);
 
-		for (int[] sw : swatches) {
-			g.fill(sw[0] + 2, sw[1] + 2, sw[0] + 12, sw[1] + 12, 0xFF000000 | sw[2]);
-		}
+		super.extractRenderState(g, mouseX, mouseY, delta);
 
 		Config cfg = SpotifyLyricsMod.config();
 		if (tab == 0) {
 			drawPlayerInfo(g);
 		} else if (tab == 1) {
-			g.text(this.font, "Line being sung", left, 71, 0xFF000000 | cfg.activeColor, true);
-			g.text(this.font, "Previous / next lines", left, 105, 0xFF000000 | cfg.otherColor, true);
+			drawColorWheel(g, left + 34, winY + 104, 32);
+			int previewCol = editingOtherColor ? cfg.otherColor : cfg.activeColor;
+			g.fill(left + 2, winY + 140, left + 66, winY + 146, 0xFF000000 | previewCol);
+		} else if (tab == 2) {
+			g.text(this.font, "Choose a custom sky backdrop (replaces vanilla sky when looking up):",
+					left, winY + 168, 0xFFCBB8F5, true);
 		} else {
-			drawAccountInfo(g);
+			g.text(this.font, "Status: Windows Media Auto-Sync Active (No Premium Needed)",
+					left, winY + 60, 0xFF55FF99, true);
+			g.text(this.font, "Just play any song in your Spotify desktop app.",
+					left, winY + 76, 0xFFD8C8FF, true);
 		}
+	}
+
+	private void drawColorWheel(GuiGraphicsExtractor g, int cx, int cy, int radius) {
+		for (int dy = -radius; dy <= radius; dy += 2) {
+			for (int dx = -radius; dx <= radius; dx += 2) {
+				double dist = Math.sqrt(dx * dx + dy * dy);
+				if (dist <= radius) {
+					float sat = (float) (dist / radius);
+					float hue = (float) ((Math.atan2(dy, dx) / (Math.PI * 2.0) + 1.0) % 1.0);
+					int rgb = Color.HSBtoRGB(hue, sat, wheelVal);
+					g.fill(cx + dx, cy + dy, cx + dx + 2, cy + dy + 2, 0xFF000000 | rgb);
+				}
+			}
+		}
+		double angle = wheelHue * Math.PI * 2.0;
+		int px = cx + (int) Math.round(Math.cos(angle) * wheelSat * radius);
+		int py = cy + (int) Math.round(Math.sin(angle) * wheelSat * radius);
+		g.fill(px - 2, py - 2, px + 3, py + 3, 0xFFFFFFFF);
+		g.fill(px - 1, py - 1, px + 2, py + 2, 0xFF000000);
 	}
 
 	private void drawPlayerInfo(GuiGraphicsExtractor g) {
 		PlaybackTracker tr = SpotifyLyricsMod.tracker();
 		SpotifyApi.Sample s = tr.sample();
+		g.fill(left, winY + 46, left + PANEL_W, winY + 88, 0xFF221342);
 		if (s == null) {
-			String err = tr.lastError();
-			g.text(this.font, SpotifyLyricsMod.auth().isLoggedIn()
-					? (err != null ? err : "Nothing playing. Start a song in the Spotify app.")
-					: "Not connected. Open the Account tab.", left, 44, 0xFFFFAA55, true);
+			g.text(this.font, "Nothing playing. Start a song in the Spotify app.", left + 8, winY + 56, 0xFFFFB86C, true);
 		} else {
-			g.text(this.font, s.title(), left, 42, 0xFFFFFFFF, true);
-			g.text(this.font, s.artist() + (s.playing() ? "" : "  (paused)"), left, 54, 0xFFA0A0A0, true);
+			g.text(this.font, s.title(), left + 8, winY + 52, 0xFFFFFFFF, true);
+			g.text(this.font, s.artist() + (s.playing() ? "" : "  (paused)"), left + 8, winY + 64, 0xFFC9B6F2, true);
 			float p = s.durationMs() > 0 ? (float) s.estimatedProgressMs() / s.durationMs() : 0f;
-			g.fill(left, 70, left + PANEL_W, 74, 0x60FFFFFF);
-			g.fill(left, 70, left + Math.round(PANEL_W * Math.max(0f, Math.min(1f, p))), 74,
+			g.fill(left + 8, winY + 78, left + PANEL_W - 8, winY + 82, 0x50FFFFFF);
+			g.fill(left + 8, winY + 78, left + 8 + Math.round((PANEL_W - 16) * Math.max(0f, Math.min(1f, p))), winY + 82,
 					0xFF000000 | SpotifyLyricsMod.config().activeColor);
 		}
 		String msg = tr.message();
-		if (!msg.isEmpty()) g.text(this.font, msg, left, 176, 0xFFAAAAAA, true);
-		g.text(this.font, "Playback control needs Spotify Premium.", left, 190, 0xFF808080, true);
+		if (!msg.isEmpty()) g.text(this.font, msg, left, winY + 176, 0xFFD8C8FF, true);
 	}
 
-	private void drawAccountInfo(GuiGraphicsExtractor g) {
-		boolean in = SpotifyLyricsMod.auth().isLoggedIn();
-		g.text(this.font, "Spotify Client ID", left, 42, 0xFFFFFFFF, true);
-		g.text(this.font, in ? "Status: connected. Lyrics start by themselves whenever a song plays."
-				: "Status: not connected", left, 82, in ? 0xFF1ED760 : 0xFFFFAA55, true);
-		String[] help = {
-				"1. developer.spotify.com/dashboard > Create app (Web API)",
-				"2. Redirect URI: " + SpotifyAuth.REDIRECT_URI,
-				"3. Paste its Client ID above, press Log in",
-				"4. Approve in your browser. You only do this once."
-		};
-		for (int i = 0; i < help.length; i++) {
-			g.text(this.font, help[i], left, 126 + i * 12, 0xFFA0A0A0, true);
-		}
-		g.text(this.font, "Dev Mode: add your own email under User Management.", left, 178, 0xFF808080, true);
-	}
-
-	// ------------------------------------------------------------------ widgets
-
-	/** Slider that reports its value while dragging. */
 	private static final class Slider extends AbstractSliderButton {
 		private final java.util.function.DoubleFunction<String> label;
 		private final java.util.function.DoubleConsumer onChange;
