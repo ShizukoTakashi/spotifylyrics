@@ -1,19 +1,21 @@
 package dev.spotifylyrics;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
-/** Draws the lyric block: optional rounded panel, title, previous / current / next lines and a progress bar. */
 public final class LyricsRenderer {
-	/** What to show. {@code anim} is 0..1 and drives the fade-in of the current line. */
-	public record Model(String header, List<String> before, String current, List<String> after,
+	public record Model(String trackId, String header, List<String> before, String current, List<String> after,
 						float progress, float anim) {
 	}
 
@@ -24,18 +26,17 @@ public final class LyricsRenderer {
 	private static final int PAD_X = 12;
 	private static final int PAD_Y = 6;
 
-	private LyricsRenderer() {
-	}
+	private LyricsRenderer() {}
 
 	public static Component styled(String text, Fonts.FontChoice fc, boolean bold) {
-		MutableComponent c = Component.literal(text);
+		String transformed = fc != null ? Fonts.applyStyle(text, fc.transform()) : text;
+		MutableComponent c = Component.literal(transformed);
 		Style st = Style.EMPTY;
 		if (fc != null && fc.fontId() != null) st = st.withFont(new FontDescription.Resource(fc.fontId()));
 		if (bold) st = st.withBold(true);
 		return c.withStyle(st);
 	}
 
-	/** Shortens text with an ellipsis so it fits in maxW pixels in the chosen font. */
 	private static Component fit(Font font, String s, Fonts.FontChoice fc, boolean bold, int maxW) {
 		Component full = styled(s, fc, bold);
 		if (font.width(full) <= maxW) return full;
@@ -53,7 +54,6 @@ public final class LyricsRenderer {
 		return (a << 24) | (rgb & 0xFFFFFF);
 	}
 
-	/** Pixel-rounded rectangle without overlapping fills (so translucent colours stay even). */
 	private static void roundedRect(GuiGraphicsExtractor g, int x1, int y1, int x2, int y2, int color) {
 		g.fill(x1 + 2, y1, x2 - 2, y1 + 1, color);
 		g.fill(x1 + 1, y1 + 1, x2 - 1, y1 + 2, color);
@@ -62,27 +62,34 @@ public final class LyricsRenderer {
 		g.fill(x1 + 2, y2 - 1, x2 - 2, y2, color);
 	}
 
-	/**
-	 * @param centerX horizontal centre of the block in screen pixels
-	 * @param bottomY y of the block's bottom edge in screen pixels
-	 */
-	public static void draw(GuiGraphicsExtractor g, Font font, Config cfg, int screenW,
+	public static void draw(GuiGraphicsExtractor g, Font font, Config cfg, int screenW, int screenH,
 							int centerX, int bottomY, Model m) {
 		float scale = cfg.scale;
 		Fonts.FontChoice fc = Fonts.byId(cfg.font);
-		int maxW = (int) Math.min((screenW - 30) / scale, 340);
+		int maxW = (int) Math.min((screenW - 40) / scale, 340);
+
+		// Sky Horizon Mode: anchored at eye/horizon height in front of player; disappears when looking down
+		if (cfg.skyHorizonMode) {
+			Minecraft mc = Minecraft.getInstance();
+			if (mc.player != null) {
+				float pitch = mc.player.getXRot(); // 0 = looking straight at horizon, +90 = looking straight down
+				if (pitch > 18f) return; // Hidden when looking down!
+				bottomY = Math.round(screenH * (0.34f + (pitch / 90f) * 0.65f));
+				bottomY = Mth.clamp(bottomY, 45, screenH - 20);
+			}
+		}
 
 		List<Row> rows = new ArrayList<>();
 		if (cfg.showTitle && m.header() != null && !m.header().isEmpty()) {
 			Component c = fit(font, m.header(), null, false, maxW);
-			rows.add(new Row(c, font.width(c), 0xB0B0B0, 0.75f, 0, false));
+			rows.add(new Row(c, font.width(c), 0xD0C4FF, 0.85f, 0, false));
 		}
 		int ctx = (cfg.linesShown - 1) / 2;
 		List<String> before = m.before();
 		for (int i = Math.max(0, before.size() - ctx); i < before.size(); i++) {
 			String s = before.get(i);
 			if (s.isBlank()) continue;
-			float a = i == before.size() - 1 ? 0.6f : 0.35f;
+			float a = i == before.size() - 1 ? 0.65f : 0.4f;
 			Component c = fit(font, s, fc, false, maxW);
 			rows.add(new Row(c, font.width(c), cfg.otherColor, a, 0, false));
 		}
@@ -97,10 +104,35 @@ public final class LyricsRenderer {
 		for (int i = 0; i < Math.min(ctx, after.size()); i++) {
 			String s = after.get(i);
 			if (s.isBlank()) continue;
-			float a = i == 0 ? 0.6f : 0.35f;
+			float a = i == 0 ? 0.65f : 0.4f;
 			Component c = fit(font, s, fc, false, maxW);
 			rows.add(new Row(c, font.width(c), cfg.otherColor, a, 0, false));
 		}
+
+		// Scattered Mode: places each lyric line across varied screen coordinates
+		if (cfg.scatteredMode) {
+			for (int i = 0; i < rows.size(); i++) {
+				Row r = rows.get(i);
+				Random rnd = new Random((r.text().getString() + i).hashCode());
+				int sx = Math.round(screenW * (0.22f + rnd.nextFloat() * 0.56f));
+				int sy = Math.round(screenH * (0.16f + rnd.nextFloat() * 0.58f));
+				if (cfg.skyHorizonMode) sy = Math.min(sy, Math.round(screenH * 0.45f));
+				g.pose().pushMatrix();
+				g.pose().translate((float) sx, (float) sy);
+				g.pose().scale(scale, scale);
+				if (cfg.panelStyle > 0) {
+					roundedRect(g, -r.width() / 2 - 6, -3, r.width() / 2 + 6, LINE_H + 3,
+							cfg.panelStyle == 1 ? 0x65160D2B : 0xD8160D2B);
+				}
+				g.text(font, r.text(), -r.width() / 2, 0, argb(r.rgb(), r.alpha()), true);
+				g.pose().popMatrix();
+			}
+			return;
+		}
+
+		Identifier coverTex = cfg.showCoverArt ? CoverArtManager.textureIfReady(m.trackId()) : null;
+		int coverSize = coverTex != null ? 36 : 0;
+		int coverGap = coverTex != null ? 8 : 0;
 
 		int widest = 100;
 		int textH = 0;
@@ -109,22 +141,30 @@ public final class LyricsRenderer {
 			textH += r.current() ? LINE_H + 4 : LINE_H;
 		}
 		boolean bar = cfg.showProgress && m.progress() >= 0f;
-		int w = widest + PAD_X * 2;
-		int h = textH + PAD_Y * 2 + (bar ? 5 : 0);
+		int w = widest + PAD_X * 2 + coverSize + coverGap;
+		int h = Math.max(textH, coverSize) + PAD_Y * 2 + (bar ? 5 : 0);
 
 		g.pose().pushMatrix();
 		g.pose().translate((float) centerX, (float) bottomY);
 		g.pose().scale(scale, scale);
 
 		int x1 = -w / 2, y1 = -h, x2 = x1 + w, y2 = 0;
-		if (cfg.panelStyle == 1) roundedRect(g, x1, y1, x2, y2, 0x70000000);
-		else if (cfg.panelStyle == 2) roundedRect(g, x1, y1, x2, y2, 0xE0121212);
+		if (cfg.panelStyle == 1) roundedRect(g, x1, y1, x2, y2, 0x78140B29);
+		else if (cfg.panelStyle == 2) roundedRect(g, x1, y1, x2, y2, 0xE5140B29);
 
+		if (coverTex != null) {
+			int cx = x1 + PAD_X;
+			int cy = y1 + (h - (bar ? 5 : 0) - coverSize) / 2;
+			g.fill(cx - 1, cy - 1, cx + coverSize + 1, cy + coverSize + 1, 0x90B388FF);
+			g.blit(coverTex, cx, cy, 0, 0, coverSize, coverSize, coverSize, coverSize);
+		}
+
+		int textCenterX = (coverSize + coverGap) / 2;
 		int y = y1 + PAD_Y;
 		for (Row r : rows) {
 			int rowH = r.current() ? LINE_H + 4 : LINE_H;
 			int ty = y + (r.current() ? 2 : 0) + Math.round(r.yShift());
-			g.text(font, r.text(), -r.width() / 2, ty, argb(r.rgb(), r.alpha()), true);
+			g.text(font, r.text(), textCenterX - r.width() / 2, ty, argb(r.rgb(), r.alpha()), true);
 			y += rowH;
 		}
 
